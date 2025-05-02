@@ -1,54 +1,93 @@
 import java.io.*;
-import java.util.Scanner;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-
 public class TaskManager {
+    private static final Queue<TaskLogEntry> taskLog = new ConcurrentLinkedQueue<>();
     private static final AtomicInteger Idcounter = new AtomicInteger(1);
+
     public static void main(String[] args) {
         Scanner s = new Scanner(System.in);
-        Set<String> validInputs = Set.of("create", "save", "download", "print","exit");
-        System.out.println("====== Task Queue Manager ======");
+        Set<String> validInputs = Set.of("create", "save", "download", "print");
+
         ExecutorService executor = Executors.newFixedThreadPool(4);
-        while(true) {
-            System.out.println("Enter a task (create,download,save,print) or exit to close:");
-            String input = s.nextLine().trim().toLowerCase();
-            String content = "";
-            String filename="";
-            if (input.equalsIgnoreCase("exit")) {
-                break;
-            }
-            if (input.isEmpty() || !validInputs.contains(input.toLowerCase())) {
-                System.out.println("Invalid! Try again.");
-                continue;
-            }else if (input.equals("create")
-                    ||input.equals("save")) {
-                System.out.println("Enter file name:");
-                filename= s.nextLine();
-                System.out.println("Enter a content:");
-                content = s.nextLine();
-            }
-            else if(input.equals("download")||
-                    input.equals("print")){
-                System.out.println("Enter file name:");
-                filename= s.nextLine().trim();            }
 
+        while (true) {
+            System.out.println("""
+                    ====== Task Queue Manager ======
+                    1. Add Task
+                    2. View Task History
+                    3. Exit
+                    ================================
+                    Enter your choice:""");
+            String choice = s.nextLine().trim();
 
-            int taskID =Idcounter.getAndIncrement();
-            executor.execute(new Task(input,content,filename,taskID));
+            switch (choice) {
+                case "1" -> {
+                    System.out.println("Enter a task (create, download, save, print):");
+                    String input = s.nextLine().trim().toLowerCase();
+
+                    if (!validInputs.contains(input)) {
+                        System.out.println("Invalid task type! Try again.");
+                        continue;
+                    }
+
+                    String content = "";
+                    String filename;
+
+                    System.out.println("Enter file name:");
+                    filename = s.nextLine().trim();
+
+                    if (input.equals("create") || input.equals("save")) {
+                        System.out.println("Enter content:");
+                        content = s.nextLine();
+                    }
+
+                    int taskID = Idcounter.getAndIncrement();
+                    taskLog.add(new TaskLogEntry(taskID, input, filename, "SUBMITTED"));
+                    executor.execute(new Task(input, content, filename, taskID));
+                }
+
+                case "2" -> {
+                    System.out.println("======== Task History =========");
+                    if (taskLog.isEmpty()) {
+                        System.out.println("No tasks submitted yet.");
+                    } else {
+                        System.out.println("""
+    ===============================================
+    | Task ID | Task Type |      File Name       |   Status   |
+    ===============================================""");
+
+                        for (TaskLogEntry entry : taskLog) {
+                            System.out.printf("| %-7d | %-9s | %-20s | %-10s |%n",
+                                    entry.taskID,
+                                    entry.taskType.toUpperCase(),
+                                    entry.filename,
+                                    entry.status);
+                        }System.out.println("===============================================");
+
+                    }
+                }
+
+                case "3" -> {
+                    System.out.println("Shutting down Task Manager...");
+                    executor.shutdown();
+                    try {
+                        if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                            executor.shutdownNow();
+                        }
+                    } catch (InterruptedException e) {
+                        executor.shutdownNow();
+                        Thread.currentThread().interrupt();
+                    }
+                    s.close();
+                    return; // Exit the method after shutdown
+                }
+
+                default -> System.out.println("Invalid choice. Please enter 1, 2, or 3.");
+            }
         }
-        try {
-            if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
-                executor.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            executor.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
-
-        s.close();
     }
 
     public static class Task implements Runnable {
@@ -56,79 +95,109 @@ public class TaskManager {
         private final String input;
         private final String content;
         private final String filename;
-       public  Task (String input,String content,String filename,int taskID){
+
+        public Task(String input, String content, String filename, int taskID) {
             this.input = input;
-            this.content= content;
-            this.taskID = taskID;
+            this.content = content;
             this.filename = filename;
-       }
+            this.taskID = taskID;
+        }
 
         @Override
         public void run() {
             String threadName = Thread.currentThread().getName();
-            System.out.println("""
-            --------------------------------
-            Task #%d started on %s
-            Task: %s
-            File: %s
-            Active Tasks: %d
-            --------------------------------
-            """.formatted(taskID, threadName, input, filename,taskID));
-            System.out.println("Started: "+input);
-            switch(input.toLowerCase()){
-                case "download" -> stimulateDownload();
-                case "print"->stimulatePrinting();
-                case "save"->stimulateSaving(content);
-                case "create"->WriteToFile(content);
+            System.out.printf("""
+                    --------------------------------
+                    Task #%d started on %s
+                    Task: %s
+                    File: %s
+                    --------------------------------
+                    %n""", taskID, threadName, input, filename);
+
+            System.out.println("Started: " + input);
+
+            switch (input) {
+                case "download" -> simulateDownload();
+                case "print" -> simulatePrinting();
+                case "save" -> simulateSaving();
+                case "create" -> writeToFile();
             }
-            System.out.println("Finished: "+input);
 
+            System.out.println("Finished: " + input);
+            updateTaskStatus(taskID, "COMPLETED");
         }
 
-        public void stimulateDownload(){
-            System.out.println("File downloading....");
+        private void simulateDownload() {
+            System.out.println("Downloading...");
             sleep(1000);
         }
-        public void stimulatePrinting(){
-            System.out.println("Printing....");
-            ReadFromFile();
+
+        private void simulatePrinting() {
+            System.out.println("Printing...");
+            readFromFile();
             sleep(1000);
         }
-        public void stimulateSaving(String content){
-            WriteToFile(content);
-           System.out.println("Saving....");
+
+        private void simulateSaving() {
+            writeToFile();
+            System.out.println("Saving...");
             sleep(1000);
         }
-        public synchronized void WriteToFile(String content){
-            System.out.println("Writing....");
-            try(BufferedWriter writer =new BufferedWriter(new FileWriter(filename,true))){
+
+        private synchronized void writeToFile() {
+            System.out.println("Writing...");
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(filename, true))) {
                 writer.write(content);
                 writer.newLine();
             } catch (IOException e) {
-                System.out.println("Logging failed: "+e.getMessage());
+                System.out.println("Write failed: " + e.getMessage());
             }
         }
-        public synchronized void ReadFromFile(){
-            System.out.println("Reading....");
-            try(BufferedReader reader =new BufferedReader(new FileReader(filename))){
+
+        private synchronized void readFromFile() {
+            System.out.println("Reading...");
+            try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
                 String line;
-                System.out.println("====== Contents of "+filename+" ======");
-                while((line = reader.readLine())!=null){
+                System.out.println("====== Contents of " + filename + " ======");
+                while ((line = reader.readLine()) != null) {
                     System.out.println(line);
                 }
             } catch (IOException e) {
-                System.out.println("File reading failed: "+e.getMessage());
-            }
-            finally {
+                System.out.println("Read failed: " + e.getMessage());
+            } finally {
                 System.out.println("====== End of file ======");
             }
         }
-        public void sleep(int ms){
-            try{
+
+        private void sleep(int ms) {
+            try {
                 Thread.sleep(ms);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                Thread.currentThread().interrupt();
             }
+        }
+
+        private void updateTaskStatus(int taskID, String newStatus) {
+            for (TaskLogEntry entry : taskLog) {
+                if (entry.taskID == taskID) {
+                    entry.status = newStatus;
+                    break;
+                }
+            }
+        }
+    }
+
+    public static class TaskLogEntry {
+        final int taskID;
+        final String taskType;
+        final String filename;
+        volatile String status;
+
+        public TaskLogEntry(int taskID, String taskType, String filename, String status) {
+            this.taskID = taskID;
+            this.taskType = taskType;
+            this.filename = filename;
+            this.status = status;
         }
     }
 }
