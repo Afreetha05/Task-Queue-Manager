@@ -18,5 +18,5 @@ A Java-based task manager that runs file operations in parallel using fixed thre
    java TaskManager
 
 # OUTPUT IMAGES
-!["Output image 1"](1.png)
-!["Output image 1"](2.png)
+!["Output image 1"](images/1.png)
+!["Output image 1"](images/2.png)
