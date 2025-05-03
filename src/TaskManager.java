@@ -47,11 +47,11 @@ public class TaskManager {
 
                     int taskID = Idcounter.getAndIncrement();
                     taskLog.add(new TaskLogEntry(taskID, input, filename, "SUBMITTED"));
-                    executor.execute(new Task(input, content, filename, taskID));
+                    Future<?> future = executor.submit(new Task(input, content, filename, taskID));
                     try{
-                        Thread.sleep(500);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
+                        future.get();
+                    } catch (InterruptedException | ExecutionException e) {
+                        System.out.println("Task failed: "+e.getMessage());
                     }
                 }
 
