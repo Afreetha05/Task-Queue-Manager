@@ -14,6 +14,7 @@ public class TaskManager {
         ExecutorService executor = Executors.newFixedThreadPool(4);
 
         while (true) {
+            System.out.println();
             System.out.println("""
                     ====== Task Queue Manager ======
                     1. Add Task
@@ -47,6 +48,11 @@ public class TaskManager {
                     int taskID = Idcounter.getAndIncrement();
                     taskLog.add(new TaskLogEntry(taskID, input, filename, "SUBMITTED"));
                     executor.execute(new Task(input, content, filename, taskID));
+                    try{
+                        Thread.sleep(500);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                 }
 
                 case "2" -> {
